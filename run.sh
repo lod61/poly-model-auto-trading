@@ -68,14 +68,25 @@ if [ ! -d "venv" ]; then
     fi
 fi
 
-source venv/bin/activate
+# 使用虚拟环境中 Python 的绝对路径（更可靠）
+PYTHON_VENV="$PROJECT_DIR/python_model/venv/bin/python3"
+if [ ! -f "$PYTHON_VENV" ]; then
+    error "虚拟环境创建失败，Python 不可用"
+fi
+
+# 在虚拟环境中创建 python 符号链接（如果不存在）
+if [ ! -f "$PROJECT_DIR/python_model/venv/bin/python" ]; then
+    ln -sf python3 "$PROJECT_DIR/python_model/venv/bin/python"
+fi
+
+PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
 
 log "Installing Python dependencies..."
-if ! pip install -q -r requirements.txt 2>&1; then
+if ! $PYTHON_CMD -m pip install -q -r requirements.txt 2>&1; then
     warn "Python 依赖安装有警告，但继续..."
 fi
 
-success "Python environment ready"
+success "Python environment ready (Python: $($PYTHON_CMD --version))"
 
 # ─────────────────────────────────────────────────────────────────────
 # Step 2: Collect data
@@ -134,7 +145,12 @@ if [ "$USE_JS_DATA_COLLECTION" = "true" ]; then
         cd "$PROJECT_DIR"
     else
         log "Using Python data collection..."
-        python collect_data.py || warn "Python data collection had issues, but continuing..."
+        cd "$PROJECT_DIR/python_model"
+        PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
+        if [ ! -f "$PYTHON_CMD" ]; then
+            PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python3"
+        fi
+        $PYTHON_CMD collect_data.py || warn "Python data collection had issues, but continuing..."
     fi
 fi
 
@@ -151,11 +167,22 @@ success "Data ready: $DATA_ROWS rows in btc_15m.csv"
 # ─────────────────────────────────────────────────────────────────────
 log "Step 3/5: Training XGBoost model..."
 
-if python train.py 2>&1 | tee /tmp/train.log; then
+# 使用虚拟环境中的 Python（绝对路径）
+cd "$PROJECT_DIR/python_model"
+PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
+if [ ! -f "$PYTHON_CMD" ]; then
+    PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python3"
+fi
+
+if [ ! -f "$PYTHON_CMD" ]; then
+    error "虚拟环境中的 Python 不可用，请检查虚拟环境是否正确创建"
+fi
+
+if $PYTHON_CMD train.py 2>&1 | tee /tmp/train.log; then
     success "Model training completed"
 else
     warn "Model training failed or ONNX export failed, attempting to create placeholder model..."
-    if python create_simple_onnx.py 2>&1; then
+    if $PYTHON_CMD create_simple_onnx.py 2>&1; then
         warn "Using placeholder model (predictions may not be accurate)"
     else
         error "Failed to create any model file"
@@ -176,7 +203,14 @@ SKIP_BACKTEST=${SKIP_BACKTEST:-false}
 if [ "$SKIP_BACKTEST" != "true" ]; then
     log "Step 4/5: Running backtest..."
     
-    if python backtest.py 2>&1; then
+    # 使用虚拟环境中的 Python
+    cd "$PROJECT_DIR/python_model"
+    PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
+    if [ ! -f "$PYTHON_CMD" ]; then
+        PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python3"
+    fi
+    
+    if [ -f "$PYTHON_CMD" ] && $PYTHON_CMD backtest.py 2>&1; then
         success "Backtest completed"
     else
         warn "Backtest had issues (non-critical, continuing...)"
@@ -184,9 +218,6 @@ if [ "$SKIP_BACKTEST" != "true" ]; then
 else
     log "Step 4/5: Skipping backtest (set SKIP_BACKTEST=true to skip)"
 fi
-
-# Deactivate Python env
-deactivate
 
 # ─────────────────────────────────────────────────────────────────────
 # Step 5: Start Node bot
