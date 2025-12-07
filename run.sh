@@ -82,9 +82,20 @@ fi
 PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
 
 log "Installing Python dependencies..."
-# 先升级 pip，避免旧版本问题
-if ! $PYTHON_CMD -m pip install --quiet --upgrade pip setuptools wheel 2>&1; then
-    warn "pip 升级失败，继续..."
+
+# 检查磁盘空间（至少需要 500MB）
+AVAILABLE_SPACE=$(df "$PROJECT_DIR" | tail -1 | awk '{print $4}')
+if [ "$AVAILABLE_SPACE" -lt 512000 ]; then
+    log "磁盘空间不足，清理 pip 缓存和临时文件..."
+    $PYTHON_CMD -m pip cache purge 2>/dev/null || true
+    rm -rf /tmp/pip-* 2>/dev/null || true
+    rm -rf ~/.cache/pip 2>/dev/null || true
+    
+    # 再次检查
+    AVAILABLE_SPACE=$(df "$PROJECT_DIR" | tail -1 | awk '{print $4}')
+    if [ "$AVAILABLE_SPACE" -lt 512000 ]; then
+        error "磁盘空间不足（可用: $(($AVAILABLE_SPACE / 1024))MB，需要至少 500MB）\n请清理磁盘空间:\n1. df -h 查看磁盘使用情况\n2. 删除不需要的文件\n3. 清理日志: rm -rf logs/*\n4. 清理 Python 缓存: rm -rf python_model/__pycache__ python_model/**/__pycache__"
+    fi
 fi
 
 # 验证依赖是否已安装
@@ -92,19 +103,24 @@ if $PYTHON_CMD -c "import numpy, pandas, xgboost, sklearn" 2>/dev/null; then
     log "Python dependencies already installed, skipping..."
 else
     log "Installing Python dependencies from requirements.txt..."
-    # 捕获是否被 kill
-    if ! $PYTHON_CMD -m pip install --quiet -r requirements.txt 2>&1; then
+    # 清理 pip 缓存，释放空间
+    $PYTHON_CMD -m pip cache purge 2>/dev/null || true
+    
+    # 使用 --no-cache-dir 避免占用额外空间
+    if ! $PYTHON_CMD -m pip install --quiet --no-cache-dir -r requirements.txt 2>&1; then
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 130 ]; then
-            error "Python 依赖安装被中断（可能是内存不足被 kill）\n请手动安装: cd python_model && venv/bin/pip install -r requirements.txt"
+            error "Python 依赖安装被中断（可能是内存不足被 kill）"
+        elif grep -q "No space left on device" /tmp/pip-*.log 2>/dev/null || [ $EXIT_CODE -eq 1 ]; then
+            error "磁盘空间不足！\n请运行以下命令清理空间:\n1. df -h 查看磁盘使用\n2. rm -rf ~/.cache/pip python_model/__pycache__ logs/*\n3. 或增加磁盘空间"
         else
-            error "Python 依赖安装失败（退出码: $EXIT_CODE）\n请检查错误信息或手动运行: cd python_model && venv/bin/pip install -r requirements.txt"
+            error "Python 依赖安装失败（退出码: $EXIT_CODE）\n请检查错误信息"
         fi
     fi
     
     # 验证关键包是否安装成功
     if ! $PYTHON_CMD -c "import numpy, pandas, xgboost, sklearn" 2>/dev/null; then
-        error "关键依赖未正确安装（numpy/pandas/xgboost/sklearn）\n请手动安装: cd python_model && venv/bin/pip install numpy pandas xgboost scikit-learn"
+        error "关键依赖未正确安装（numpy/pandas/xgboost/sklearn）\n请手动安装: cd python_model && venv/bin/pip install --no-cache-dir numpy pandas xgboost scikit-learn"
     fi
 fi
 
