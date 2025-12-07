@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  btc-bot:
+    build:
+      context: ./node_bot
+      dockerfile: Dockerfile
+    container_name: poly-btc-bot
+    restart: always
+    
+    # Environment variables
+    env_file:
+      - ./node_bot/.env
+    
+    environment:
+      - NODE_ENV=production
+      - TZ=UTC
+    
+    # Mount model and logs
+    volumes:
+      - ./model:/app/model:ro
+      - ./logs:/app/logs
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: always
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Network
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
+

@@ -1,0 +1,53 @@
+# 环境变量和敏感信息
+.env
+.env.local
+.env.*.local
+node_bot/.env
+
+# Python
+python_model/venv/
+python_model/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node.js
+node_modules/
+node_bot/node_modules/
+node_bot/dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 数据文件（太大，不要提交到 Git）
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# 模型文件（太大，可以在服务器上训练）
+model/*.onnx
+model/*.json
+!model/.gitkeep
+
+# 日志
+logs/
+*.log
+/tmp/bot.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+.cache/
+
