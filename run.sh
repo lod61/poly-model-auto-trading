@@ -82,8 +82,30 @@ fi
 PYTHON_CMD="$PROJECT_DIR/python_model/venv/bin/python"
 
 log "Installing Python dependencies..."
-if ! $PYTHON_CMD -m pip install -q -r requirements.txt 2>&1; then
-    warn "Python 依赖安装有警告，但继续..."
+# 先升级 pip，避免旧版本问题
+if ! $PYTHON_CMD -m pip install --quiet --upgrade pip setuptools wheel 2>&1; then
+    warn "pip 升级失败，继续..."
+fi
+
+# 验证依赖是否已安装
+if $PYTHON_CMD -c "import numpy, pandas, xgboost, sklearn" 2>/dev/null; then
+    log "Python dependencies already installed, skipping..."
+else
+    log "Installing Python dependencies from requirements.txt..."
+    # 捕获是否被 kill
+    if ! $PYTHON_CMD -m pip install --quiet -r requirements.txt 2>&1; then
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 130 ]; then
+            error "Python 依赖安装被中断（可能是内存不足被 kill）\n请手动安装: cd python_model && venv/bin/pip install -r requirements.txt"
+        else
+            error "Python 依赖安装失败（退出码: $EXIT_CODE）\n请检查错误信息或手动运行: cd python_model && venv/bin/pip install -r requirements.txt"
+        fi
+    fi
+    
+    # 验证关键包是否安装成功
+    if ! $PYTHON_CMD -c "import numpy, pandas, xgboost, sklearn" 2>/dev/null; then
+        error "关键依赖未正确安装（numpy/pandas/xgboost/sklearn）\n请手动安装: cd python_model && venv/bin/pip install numpy pandas xgboost scikit-learn"
+    fi
 fi
 
 success "Python environment ready (Python: $($PYTHON_CMD --version))"
