@@ -359,6 +359,10 @@ else
         else
             log "Starting bot in background mode (default)..."
             
+            # 确保日志目录和文件存在
+            mkdir -p "$PROJECT_DIR/logs"
+            touch "$PROJECT_DIR/logs/bot.log" 2>/dev/null || true
+            
             # 使用 nohup 后台运行
             nohup bun run start > "$PROJECT_DIR/logs/bot_console.log" 2>&1 &
             BOT_PID=$!
@@ -436,6 +440,10 @@ else
             npm run start
         else
             log "Starting bot in background mode (default)..."
+            
+            # 确保日志目录和文件存在
+            mkdir -p "$PROJECT_DIR/logs"
+            touch "$PROJECT_DIR/logs/bot.log" 2>/dev/null || true
             
             # 使用 nohup 后台运行
             nohup npm run start > "$PROJECT_DIR/logs/bot_console.log" 2>&1 &
