@@ -352,17 +352,31 @@ else
         echo "═══════════════════════════════════════════════════════════════"
         echo ""
         
-        # 检查是否要后台运行（检查所有参数）
-        BG_FLAG=false
+        # 检查是否要前台运行（默认后台运行）
+        FOREGROUND_FLAG=false
         for arg in "$@"; do
-            if [ "$arg" = "--background" ] || [ "$arg" = "-b" ]; then
-                BG_FLAG=true
+            if [ "$arg" = "--foreground" ] || [ "$arg" = "-f" ]; then
+                FOREGROUND_FLAG=true
                 break
             fi
         done
         
-        if [ "$BG_FLAG" = "true" ]; then
-            log "Starting bot in background mode..."
+        if [ "$FOREGROUND_FLAG" = "true" ]; then
+            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
+            echo ""
+            echo "💡 提示:"
+            echo "   - 默认后台运行: ./run.sh"
+            echo "   - 查看日志: tail -f logs/bot.log"
+            echo "   - 或使用: cd node_bot && npm run logs"
+            echo "   - 查看状态: cd node_bot && npm run status"
+            echo ""
+            echo "按 Ctrl+C 停止机器人"
+            echo ""
+            
+            # Run directly (foreground so logs go to both console and file)
+            npm run start
+        else
+            log "Starting bot in background mode (default)..."
             
             # 使用 nohup 后台运行
             nohup npm run start > "$PROJECT_DIR/logs/bot_console.log" 2>&1 &
@@ -379,24 +393,12 @@ else
             echo "💡 常用命令:"
             echo "   查看日志: tail -f logs/bot.log"
             echo "   查看状态: ps -p $BOT_PID"
-            echo "   停止机器人: kill $BOT_PID"
-            echo "   或: pkill -f 'node dist/index.js'"
+            echo "   停止机器人: ./stop.sh"
+            echo "   或: kill $BOT_PID"
             echo ""
             echo "✅ 你可以安全地关闭 terminal 了！"
-        else
-            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
             echo ""
-            echo "💡 提示:"
-            echo "   - 后台运行: ./run.sh --background"
-            echo "   - 查看日志: tail -f logs/bot.log"
-            echo "   - 或使用: cd node_bot && npm run logs"
-            echo "   - 查看状态: cd node_bot && npm run status"
-            echo ""
-            echo "按 Ctrl+C 停止机器人"
-            echo ""
-            
-            # Run directly (foreground so logs go to both console and file)
-            npm run start
+            echo "💡 如需前台运行: ./run.sh --foreground"
         fi
     fi
 fi
