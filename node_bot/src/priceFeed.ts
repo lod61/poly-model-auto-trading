@@ -32,11 +32,37 @@ let chainlinkFeed: ethers.Contract | null = null;
 let pollInterval: NodeJS.Timeout | null = null;
 
 /**
+ * 检查 RPC URL 是否有效。
+ */
+function isValidRpcUrl(url: string): boolean {
+  // 跳过占位符和演示 URL
+  if (!url || 
+      url.includes("YOUR_API_KEY") || 
+      url.includes("/demo") ||
+      url.includes("/demo-key") ||
+      url === "" ||
+      url === "demo") {
+    return false;
+  }
+  return true;
+}
+
+/**
  * 初始化 Chainlink。
  */
 function initChainlink(): void {
+  // 检查 RPC URL 是否有效
+  if (!isValidRpcUrl(RPC_URL)) {
+    log.warn("[PRICE] RPC_URL 未配置或无效，跳过 Chainlink（将仅使用 Binance 数据）");
+    log.warn("[PRICE] 提示: 在 .env 中设置有效的 RPC_URL 以启用 Chainlink");
+    return;
+  }
+
   try {
+    // 创建 provider，不自动检测网络（避免无限重试）
+    // 注意：ethers v6 的 JsonRpcProvider 会自动检测网络，但我们会在失败时禁用
     chainlinkProvider = new ethers.JsonRpcProvider(RPC_URL);
+    
     chainlinkFeed = new ethers.Contract(
       CHAINLINK_BTC_USD_FEED,
       AGGREGATOR_ABI,
@@ -44,28 +70,59 @@ function initChainlink(): void {
     );
     log.info("[PRICE] Chainlink 已初始化");
   } catch (error) {
-    log.error("[PRICE] Chainlink 初始化失败:", error);
+    log.warn("[PRICE] Chainlink 初始化失败，将仅使用 Binance 数据:", error);
+    chainlinkProvider = null;
+    chainlinkFeed = null;
   }
 }
+
+let chainlinkFailureCount = 0;
+const MAX_CHAINLINK_FAILURES = 3; // 连续失败 3 次后禁用 Chainlink
 
 /**
  * 从 Chainlink 获取价格。
  */
 async function fetchChainlinkPrice(): Promise<number | null> {
-  if (!chainlinkFeed) return null;
+  // 如果已禁用或不存在，直接返回
+  if (!chainlinkFeed || chainlinkFailureCount >= MAX_CHAINLINK_FAILURES) {
+    return null;
+  }
 
   try {
     const feed = chainlinkFeed; // 类型收窄
     if (!feed.latestRoundData || !feed.decimals) return null;
     
-    const [, answer, , updatedAt] = await feed.latestRoundData();
+    // 设置超时，避免长时间等待
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Chainlink 请求超时")), 5000);
+    });
+    
+    const [, answer, , updatedAt] = await Promise.race([
+      feed.latestRoundData(),
+      timeoutPromise,
+    ]);
     const decimals = await feed.decimals();
     const price = Number(answer) / 10 ** Number(decimals);
 
+    // 成功时重置失败计数
+    chainlinkFailureCount = 0;
     log.debug(`[PRICE] Chainlink: $${price.toFixed(2)}`);
     return price;
   } catch (error) {
-    log.error("[PRICE] Chainlink 获取失败:", error);
+    chainlinkFailureCount++;
+    
+    // 只在第一次失败时记录详细错误，后续静默处理
+    if (chainlinkFailureCount === 1) {
+      log.warn("[PRICE] Chainlink 获取失败，将仅使用 Binance 数据");
+    }
+    
+    // 达到失败上限时禁用 Chainlink
+    if (chainlinkFailureCount >= MAX_CHAINLINK_FAILURES) {
+      log.warn(`[PRICE] Chainlink 连续失败 ${MAX_CHAINLINK_FAILURES} 次，已禁用（请检查 RPC_URL 配置）`);
+      chainlinkProvider = null;
+      chainlinkFeed = null;
+    }
+    
     return null;
   }
 }
@@ -198,10 +255,15 @@ export async function startPriceFeed(): Promise<void> {
     // 继续运行，使用 Chainlink 轮询作为备用
   }
 
-  // 定期轮询 Chainlink 作为备份
-  pollInterval = setInterval(async () => {
-    await fetchChainlinkPrice();
-  }, PRICE_POLL_INTERVAL_MS);
+  // 定期轮询 Chainlink 作为备份（仅在启用时）
+  if (chainlinkFeed) {
+    pollInterval = setInterval(async () => {
+      await fetchChainlinkPrice();
+    }, PRICE_POLL_INTERVAL_MS);
+    log.info("[PRICE] Chainlink 轮询已启动");
+  } else {
+    log.info("[PRICE] Chainlink 未启用，仅使用 Binance 数据");
+  }
 
   log.info("[PRICE] 价格源已启动");
 }

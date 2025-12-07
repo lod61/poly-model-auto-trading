@@ -351,18 +351,53 @@ else
         echo "  Starting bot..."
         echo "═══════════════════════════════════════════════════════════════"
         echo ""
-        echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
-        echo ""
-        echo "💡 提示:"
-        echo "   - 在另一个终端运行: tail -f logs/bot.log"
-        echo "   - 或使用: cd node_bot && npm run logs"
-        echo "   - 查看状态: cd node_bot && npm run status"
-        echo ""
-        echo "按 Ctrl+C 停止机器人"
-        echo ""
         
-        # Run directly (foreground so logs go to both console and file)
-        npm run start
+        # 检查是否要后台运行（检查所有参数）
+        BG_FLAG=false
+        for arg in "$@"; do
+            if [ "$arg" = "--background" ] || [ "$arg" = "-b" ]; then
+                BG_FLAG=true
+                break
+            fi
+        done
+        
+        if [ "$BG_FLAG" = "true" ]; then
+            log "Starting bot in background mode..."
+            
+            # 使用 nohup 后台运行
+            nohup npm run start > "$PROJECT_DIR/logs/bot_console.log" 2>&1 &
+            BOT_PID=$!
+            
+            # 保存 PID
+            echo $BOT_PID > "$PROJECT_DIR/logs/bot.pid"
+            
+            success "Bot started in background (PID: $BOT_PID)"
+            echo ""
+            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
+            echo "📋 控制台输出: $PROJECT_DIR/logs/bot_console.log"
+            echo ""
+            echo "💡 常用命令:"
+            echo "   查看日志: tail -f logs/bot.log"
+            echo "   查看状态: ps -p $BOT_PID"
+            echo "   停止机器人: kill $BOT_PID"
+            echo "   或: pkill -f 'node dist/index.js'"
+            echo ""
+            echo "✅ 你可以安全地关闭 terminal 了！"
+        else
+            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
+            echo ""
+            echo "💡 提示:"
+            echo "   - 后台运行: ./run.sh --background"
+            echo "   - 查看日志: tail -f logs/bot.log"
+            echo "   - 或使用: cd node_bot && npm run logs"
+            echo "   - 查看状态: cd node_bot && npm run status"
+            echo ""
+            echo "按 Ctrl+C 停止机器人"
+            echo ""
+            
+            # Run directly (foreground so logs go to both console and file)
+            npm run start
+        fi
     fi
 fi
 
