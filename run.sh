@@ -219,14 +219,26 @@ fi
 if $PYTHON_CMD train.py 2>&1 | tee /tmp/train.log; then
     success "Model training completed"
 else
-    warn "Model training failed or ONNX export failed, attempting to create placeholder model..."
+    warn "Model training script failed"
+fi
+
+# 检查 ONNX 模型是否存在，如果不存在则使用 fallback
+if [ ! -f "$PROJECT_DIR/model/model.onnx" ]; then
+    warn "ONNX model not found, creating placeholder model..."
+    
+    # 确保 metadata.json 存在（train.py 应该已经保存了）
+    if [ ! -f "$PROJECT_DIR/model/metadata.json" ]; then
+        error "metadata.json 不存在，无法创建占位符模型。请检查训练是否成功完成。"
+    fi
+    
     if $PYTHON_CMD create_simple_onnx.py 2>&1; then
         warn "Using placeholder model (predictions may not be accurate)"
     else
-        error "Failed to create any model file"
+        error "Failed to create placeholder model. Please check create_simple_onnx.py"
     fi
 fi
 
+# 最终验证
 if [ ! -f "$PROJECT_DIR/model/model.onnx" ]; then
     error "Model file not found - training and fallback both failed"
 fi
