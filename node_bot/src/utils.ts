@@ -33,6 +33,15 @@ if (!existsSync(LOG_DIR)) {
 }
 const LOG_FILE = resolve(LOG_DIR, "bot.log");
 
+// 确保日志文件存在（创建空文件）
+if (!existsSync(LOG_FILE)) {
+  try {
+    appendFileSync(LOG_FILE, "");
+  } catch (error) {
+    console.error("无法创建日志文件:", error);
+  }
+}
+
 function writeLog(level: string, message: string, data?: unknown): void {
   const logEntry = `[${timestamp()}] [${level}] ${message}${data ? " " + JSON.stringify(data) : ""}\n`;
   
