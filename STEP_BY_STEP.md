@@ -13,9 +13,15 @@
 # 更新系统
 sudo apt update
 
-# 安装 Node.js 和 npm
+# 安装 Node.js 和 npm（使用 NodeSource 官方仓库，避免依赖冲突）
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-sudo apt install -y nodejs npm
+sudo apt install -y nodejs
+
+# ⚠️ 注意：不要单独安装 npm，NodeSource 的 nodejs 包已经包含 npm
+# 如果之前尝试安装过 npm 导致冲突，先清理：
+# sudo apt remove -y nodejs npm
+# sudo apt autoremove -y
+# 然后重新运行上面的命令
 
 # 安装 Python 和相关工具
 sudo apt install -y python3 python3-pip python3-venv build-essential
@@ -27,6 +33,15 @@ python3 --version
 ```
 
 **如果所有命令都显示版本号，说明安装成功！** ✅
+
+**如果 npm 安装失败（依赖冲突）：**
+```bash
+# 清理并重新安装
+sudo apt remove -y nodejs npm
+sudo apt autoremove -y
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt install -y nodejs
+```
 
 ---
 

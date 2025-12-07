@@ -42,30 +42,46 @@ fi
 log "更新包列表..."
 $USE_SUDO apt-get update -qq
 
-# 1. 安装 Node.js 18+
+# 1. 安装 Node.js 18+ 和 npm（使用 NodeSource 官方仓库，避免依赖问题）
 log "检查 Node.js..."
-if ! command -v node &> /dev/null; then
-    log "安装 Node.js 18..."
-    $USE_SUDO apt-get install -y -qq curl
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+    log "安装 Node.js 20 和 npm（使用 NodeSource 官方仓库）..."
+    
+    # 安装 curl（如果还没有）
+    if ! command -v curl &> /dev/null; then
+        $USE_SUDO apt-get install -y -qq curl
+    fi
+    
+    # 添加 NodeSource 仓库
+    log "添加 NodeSource 仓库..."
     curl -fsSL https://deb.nodesource.com/setup_20.x | $USE_SUDO bash -
+    
+    # 安装 Node.js（包含 npm）
+    log "安装 Node.js 和 npm..."
     $USE_SUDO apt-get install -y -qq nodejs
+    
     success "Node.js 已安装: $(node --version)"
+    success "npm 已安装: $(npm -v)"
 else
     NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
     if [ "$NODE_VERSION" -lt 18 ]; then
         warn "Node.js 版本过低 ($(node -v))，建议升级到 18+"
+        log "升级 Node.js..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | $USE_SUDO bash -
+        $USE_SUDO apt-get install -y -qq nodejs
+        success "Node.js 已升级: $(node --version)"
     else
         success "Node.js 已安装: $(node -v)"
     fi
-fi
-
-# 2. 安装 npm (通常随 Node.js 一起安装)
-if ! command -v npm &> /dev/null; then
-    log "安装 npm..."
-    $USE_SUDO apt-get install -y -qq npm
-    success "npm 已安装: $(npm -v)"
-else
-    success "npm 已安装: $(npm -v)"
+    
+    if ! command -v npm &> /dev/null; then
+        warn "npm 未找到，但 Node.js 已安装，尝试修复..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | $USE_SUDO bash -
+        $USE_SUDO apt-get install -y -qq nodejs
+        success "npm 已安装: $(npm -v)"
+    else
+        success "npm 已安装: $(npm -v)"
+    fi
 fi
 
 # 3. 安装 Python 3 和 venv
