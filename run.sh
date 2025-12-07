@@ -23,6 +23,31 @@ mkdir -p "$PROJECT_DIR/data"
 mkdir -p "$PROJECT_DIR/model"
 mkdir -p "$PROJECT_DIR/logs"
 
+# 检查基本依赖
+check_dependencies() {
+    local missing_deps=()
+    
+    if ! command -v node &> /dev/null; then
+        missing_deps+=("Node.js (安装: apt install nodejs)")
+    fi
+    
+    if ! command -v npm &> /dev/null; then
+        missing_deps+=("npm (安装: apt install npm)")
+    fi
+    
+    if ! command -v python3 &> /dev/null; then
+        missing_deps+=("Python 3 (安装: apt install python3)")
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        error "缺少以下依赖:\n$(printf '  - %s\n' "${missing_deps[@]}")\n\n运行: ./install-dependencies.sh 或手动安装上述依赖"
+    fi
+}
+
+log "检查系统依赖..."
+check_dependencies
+success "系统依赖检查通过"
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "  BTC 15M PREDICTION BOT - FULL PIPELINE"
@@ -38,13 +63,17 @@ cd "$PROJECT_DIR/python_model"
 
 if [ ! -d "venv" ]; then
     log "Creating virtual environment..."
-    python3 -m venv venv
+    if ! python3 -m venv venv 2>&1; then
+        error "创建虚拟环境失败。请运行: apt install python3-venv\n或运行: ./install-dependencies.sh"
+    fi
 fi
 
 source venv/bin/activate
 
 log "Installing Python dependencies..."
-pip install -q -r requirements.txt
+if ! pip install -q -r requirements.txt 2>&1; then
+    warn "Python 依赖安装有警告，但继续..."
+fi
 
 success "Python environment ready"
 
@@ -75,22 +104,32 @@ if [ ! -f "$PROJECT_DIR/data/btc_15m.csv" ] || [ ! -s "$PROJECT_DIR/data/btc_15m
     USE_JS_DATA_COLLECTION=${USE_JS_DATA_COLLECTION:-true}
     DATA_DAYS=${DATA_DAYS:-7}
     
-    if [ "$USE_JS_DATA_COLLECTION" = "true" ]; then
-        log "Using JavaScript data collection (recommended)..."
-        cd "$PROJECT_DIR/node_bot"
-        
-        # 检查 Node.js 依赖
-        if [ ! -d "node_modules" ]; then
-            log "Installing Node.js dependencies..."
-            npm install --silent
+if [ "$USE_JS_DATA_COLLECTION" = "true" ]; then
+    log "Using JavaScript data collection (recommended)..."
+    cd "$PROJECT_DIR/node_bot"
+    
+    # 检查 Node.js 和 npm
+    if ! command -v node &> /dev/null; then
+        error "Node.js 未安装。请运行: ./install-dependencies.sh 或 apt install nodejs npm"
+    fi
+    if ! command -v npm &> /dev/null; then
+        error "npm 未安装。请运行: ./install-dependencies.sh 或 apt install npm"
+    fi
+    
+    # 检查 Node.js 依赖
+    if [ ! -d "node_modules" ]; then
+        log "Installing Node.js dependencies..."
+        if ! npm install --silent 2>&1; then
+            error "npm install 失败。请检查网络连接或手动运行: cd node_bot && npm install"
         fi
-        
-        log "Collecting $DATA_DAYS days of data..."
-        if npm run collect-data "$DATA_DAYS" 2>&1; then
-            success "Data collection completed"
-        else
-            warn "Data collection had issues, but continuing..."
-        fi
+    fi
+    
+    log "Collecting $DATA_DAYS days of data..."
+    if npm run collect-data "$DATA_DAYS" 2>&1; then
+        success "Data collection completed"
+    else
+        warn "Data collection had issues, but continuing..."
+    fi
         
         cd "$PROJECT_DIR"
     else
