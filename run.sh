@@ -328,11 +328,70 @@ else
         echo ""
         success "Build complete!"
         echo ""
-        echo "Starting bot..."
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "  Starting bot..."
+        echo "═══════════════════════════════════════════════════════════════"
         echo ""
         
-        # Run directly (for development)
-        bun run start
+        # 检查是否要前台运行（默认后台运行）
+        FOREGROUND_FLAG=false
+        for arg in "$@"; do
+            if [ "$arg" = "--foreground" ] || [ "$arg" = "-f" ]; then
+                FOREGROUND_FLAG=true
+                break
+            fi
+        done
+        
+        if [ "$FOREGROUND_FLAG" = "true" ]; then
+            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
+            echo ""
+            echo "💡 提示:"
+            echo "   - 默认后台运行: ./run.sh"
+            echo "   - 查看日志: tail -f logs/bot.log"
+            echo "   - 或使用: cd node_bot && npm run logs"
+            echo "   - 查看状态: cd node_bot && npm run status"
+            echo ""
+            echo "按 Ctrl+C 停止机器人"
+            echo ""
+            
+            # Run directly (foreground so logs go to both console and file)
+            bun run start
+        else
+            log "Starting bot in background mode (default)..."
+            
+            # 使用 nohup 后台运行
+            nohup bun run start > "$PROJECT_DIR/logs/bot_console.log" 2>&1 &
+            BOT_PID=$!
+            
+            # 保存 PID
+            echo $BOT_PID > "$PROJECT_DIR/logs/bot.pid"
+            
+            success "Bot started in background (PID: $BOT_PID)"
+            echo ""
+            echo "📊 日志文件: $PROJECT_DIR/logs/bot.log"
+            echo "📋 控制台输出: $PROJECT_DIR/logs/bot_console.log"
+            echo ""
+            echo "💡 常用命令:"
+            echo "   查看日志: tail -f logs/bot.log"
+            echo "   查看状态: ps -p $BOT_PID"
+            echo "   停止机器人: ./stop.sh"
+            echo "   或: kill $BOT_PID"
+            echo ""
+            echo "✅ 你可以安全地关闭 terminal 了！"
+            echo ""
+            echo "💡 如需前台运行: ./run.sh --foreground"
+            
+            # 等待 2 秒确保进程启动
+            sleep 2
+            
+            # 检查进程是否还在运行
+            if ps -p $BOT_PID > /dev/null 2>&1; then
+                exit 0
+            else
+                warn "Bot process exited immediately, check logs/bot_console.log for errors"
+                exit 1
+            fi
+        fi
     else
         log "Installing dependencies with npm..."
         if [ ! -d "node_modules" ]; then
@@ -399,6 +458,17 @@ else
             echo "✅ 你可以安全地关闭 terminal 了！"
             echo ""
             echo "💡 如需前台运行: ./run.sh --foreground"
+            
+            # 等待 2 秒确保进程启动
+            sleep 2
+            
+            # 检查进程是否还在运行
+            if ps -p $BOT_PID > /dev/null 2>&1; then
+                exit 0
+            else
+                warn "Bot process exited immediately, check logs/bot_console.log for errors"
+                exit 1
+            fi
         fi
     fi
 fi
