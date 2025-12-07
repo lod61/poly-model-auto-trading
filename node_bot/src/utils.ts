@@ -120,9 +120,15 @@ export function kellyBetSize(
   kellyFraction: number = 0.25,  // 1/4 Kelly
   maxFraction: number = 0.10,   // 最大 10% 仓位
 ): number {
-  // 边界检查
-  if (probWin <= 0 || probWin >= 1) return 0;
-  if (marketPrice <= 0 || marketPrice >= 1) return 0;
+  // 边界检查 - 限制概率范围而不是直接返回 0
+  if (probWin <= 0.01 || probWin >= 0.99) {
+    // 极端概率值，使用保守估计
+    probWin = Math.max(0.01, Math.min(0.99, probWin));
+  }
+  if (marketPrice <= 0.01 || marketPrice >= 0.99) {
+    // 市场价格异常，不下注
+    return 0;
+  }
 
   // 计算赔率: 赢了得到 (1 - price) / price
   const b = (1 - marketPrice) / marketPrice;
@@ -161,13 +167,38 @@ export function calculateBetSize(
  * 获取当前 15 分钟窗口的开始时间 (UTC)。
  * 
  * Polymarket 窗口: 00:00, 00:15, 00:30, 00:45, ...
+ * 
+ * 注意：Polymarket 使用 ET (Eastern Time)，但窗口对齐到 UTC
+ * ET = UTC-5 (冬令时) 或 UTC-4 (夏令时)
  */
 export function get15MinWindowStart(date: Date = new Date()): Date {
   const d = new Date(date);
   const minutes = d.getUTCMinutes();
   const windowStartMinute = Math.floor(minutes / 15) * 15;
   d.setUTCMinutes(windowStartMinute, 0, 0);
+  d.setUTCSeconds(0, 0);
   return d;
+}
+
+/**
+ * 格式化时间为 ET 时区显示
+ */
+export function formatETTime(date: Date): string {
+  // ET = UTC-5 (冬令时，11月-3月) 或 UTC-4 (夏令时，4月-10月)
+  // 简单判断：11月-3月为冬令时，其他为夏令时
+  const month = date.getUTCMonth() + 1; // 0-11 -> 1-12
+  const isDST = month >= 4 && month <= 10;
+  const offsetHours = isDST ? -4 : -5;
+  
+  const etDate = new Date(date.getTime() + offsetHours * 60 * 60 * 1000);
+  
+  const year = etDate.getUTCFullYear();
+  const monthStr = String(etDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(etDate.getUTCDate()).padStart(2, "0");
+  const hour = String(etDate.getUTCHours()).padStart(2, "0");
+  const minute = String(etDate.getUTCMinutes()).padStart(2, "0");
+  
+  return `${year}-${monthStr}-${day} ${hour}:${minute} ET`;
 }
 
 /**

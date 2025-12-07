@@ -248,23 +248,57 @@ export async function runModel(features: Float32Array): Promise<number> {
 
   const results = await session.run(feeds);
 
+  // 调试：输出所有结果键
+  log.debug(`[MODEL] 模型输出键: ${Object.keys(results).join(", ")}`);
+
   // skl2onnx 输出: output_label, output_probability
   const probabilities = results["output_probability"];
 
   if (probabilities) {
     const data = probabilities.data;
     if (data instanceof Float32Array || Array.isArray(data)) {
-      // [prob_down, prob_up]
-      const probUp = (data[1] ?? 0.5) as number;
+      // 检查输出维度
+      const shape = probabilities.dims;
+      log.debug(`[MODEL] 概率输出形状: [${shape?.join(", ")}], 数据: [${Array.from(data).map(x => x.toFixed(4)).join(", ")}]`);
+      
+      // 可能格式: [prob_down, prob_up] 或 [prob_up, prob_down]
+      let probUp: number;
+      
+      if (data.length === 2) {
+        // 尝试两种格式，选择合理的那个
+        const prob0 = data[0] ?? 0.5;
+        const prob1 = data[1] ?? 0.5;
+        
+        // 检查哪个更像概率分布（总和接近1）
+        const sum01 = prob0 + prob1;
+        if (Math.abs(sum01 - 1.0) < 0.1) {
+          // 如果是 [prob_down, prob_up]
+          probUp = prob1;
+        } else {
+          // 如果不符合，尝试 [prob_up, prob_down]
+          probUp = prob0;
+        }
+      } else if (data.length === 1) {
+        // 单输出，可能是 probUp
+        probUp = data[0] ?? 0.5;
+      } else {
+        log.warn(`[MODEL] 意外的概率输出维度: ${data.length}`);
+        probUp = 0.5;
+      }
+      
+      // 限制概率范围，避免极端值
+      probUp = Math.max(0.05, Math.min(0.95, probUp));
+      
       log.debug(`[MODEL] 预测: probUp=${probUp.toFixed(4)}`);
       return probUp;
     }
   }
 
-  // Fallback
+  // Fallback: 使用 label
   const label = results["output_label"];
   if (label) {
     const predicted = (label.data as BigInt64Array)[0];
+    // 返回中性概率，不要极端值
     return predicted === 1n ? 0.55 : 0.45;
   }
 

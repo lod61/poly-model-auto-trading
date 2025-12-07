@@ -48,6 +48,7 @@ import {
   msUntilNextWindow,
   isOptimalBettingTime,
   getNext15MinWindowStart,
+  formatETTime,
 } from "./utils.js";
 
 // === 状态 ===
@@ -122,8 +123,12 @@ async function executeTrade(): Promise<void> {
   }
 
   const nextWindow = getNext15MinWindowStart();
+  const currentWindow = get15MinWindowStart();
+  
   log.info(`[MAIN] ═══════════════════════════════════════`);
-  log.info(`[MAIN] 预测 #${totalPredictions} | 目标窗口: ${nextWindow.toISOString()}`);
+  log.info(`[MAIN] 预测 #${totalPredictions}`);
+  log.info(`[MAIN] 当前窗口: ${formatETTime(currentWindow)} (${currentWindow.toISOString()} UTC)`);
+  log.info(`[MAIN] 目标窗口: ${formatETTime(nextWindow)} (${nextWindow.toISOString()} UTC)`);
   log.info(`[MAIN] 当前价格: ${formatUsd(currentPrice)}`);
 
   // 3. 运行模型
@@ -313,7 +318,13 @@ async function mainLoop(): Promise<void> {
     try {
       // 检查是否在最佳下注时间 (窗口前 10-60 秒)
       if (isOptimalBettingTime()) {
-        log.info(`[MAIN] 进入最佳下注时间，距离下一窗口 ${Math.round(msUntilNextWindow() / 1000)} 秒`);
+        const nextWindow = getNext15MinWindowStart();
+        const msUntil = msUntilNextWindow();
+        log.info(`[MAIN] ═══════════════════════════════════════`);
+        log.info(`[MAIN] 🎯 进入最佳下注时间`);
+        log.info(`[MAIN] 目标窗口: ${formatETTime(nextWindow)} (${nextWindow.toISOString()} UTC)`);
+        log.info(`[MAIN] 距离窗口开始: ${Math.round(msUntil / 1000)} 秒`);
+        log.info(`[MAIN] ═══════════════════════════════════════`);
         await executeTrade();
         
         // 等待到窗口开始后再继续
